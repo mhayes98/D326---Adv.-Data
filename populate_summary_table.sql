@@ -8,5 +8,5 @@ INSERT INTO summary (
     FROM
         detailed
     GROUP BY
-        staff_id
+        staff_id, staff_name
 )
