@@ -1,0 +1,189 @@
+D326 – Advanced Data Management
+Matt Hayes
+
+Task 1: Data Analysis
+
+A.
+	I will be creating a report focused on the store"s rental data, divided into two parts: a detailed report, and a summarized report. The detailed report will showcase individual transactions, including information such as the film’s ID, the staff member who processed the transaction, and rental/return dates. The summarized report will provide an overview of individual staff members performance throughout the month, highlighting their total number of transactions.
+
+A.1.
+	The following fields will be present in the detailed report:
+            ▪ staff_id : smallint
+            ▪ staff_name : varchar(25)
+            ▪ film_id : smallint
+            ▪ film_name : varchar(255)
+            ▪ rental_rate : decimal(4, 2)
+            ▪ rental_date : varchar(10)
+            ▪ return_date : varchar(10)
+            ▪ rental_length : varchar(7)
+	The following fields will be present in the summary report:
+    • staff_id : smallint
+    • staff_name : varchar(25)
+    • month : varchar(10)
+    • total_rentals : smallint
+    • total_rental_rate : decimal(10, 2)
+
+
+
+
+A.2.
+	The following data types will be included:
+            ▪ Integer: smallint, decimal (4, 2), decimal (6, 2)
+            ▪ String: text, varchar(10), varchar(255)
+
+A.3.
+	The summarized report will pull entirely from the detailed report, and the detailed report will pull from the following tables:
+    • Rental
+    • Film
+    • Inventory
+
+A.4.
+	There will be three functions used in these reports that transform data in some way:
+    • timeStampToDateConversion
+        ◦ This function will convert timestamps into varchar(10) fields in DD-MM-YYYY format, dropping the hours/minutes/seconds. Improves readability by removing unnecessary information.
+    • calculateLengthOfRental
+        ◦  This will calculate the number of days between the rental date and return date, then append a “d” afterwards. Improves readability by adding an obvious indicator of what the columns values represent.
+    • getStaffFullName
+        ◦ This will concatenate employees first name and last name together with a space separator. Improves readability by reducing the number of used columns while providing the same information in a familiar format.
+
+A.5.
+	The detailed report can be used to identify trends with individual films, this can be cross referenced with inventory data to determine if additional inventory needs to be purchased for popular films, or if excess inventory can be removed for unpopular films. Additionally, any emerging trends regarding rental length or rental rates may be identified as well.
+	The summarized report will be focused on individual staff members and can be used to ensure that all employees are meeting any applicable metrics. Any employee significantly exceeding expectations may be identified and considered for career growth opportunities or group training sessions. However, it is also important to consider the context of each employee"s role and the days or hours they worked when viewing this report. An employee who primarily works weekends may have higher numbers than their workday counterparts.
+
+A.6.
+	This report should be refreshed on the first of each month prior to operating hours. This report should be ran on any previous months data as well. However, any stores exceeding a certain number of weekly rentals may find use in a bi-weekly refresh. If so, this report should be refreshed on the morning of the 1st and 3rd Monday of each month prior to operating hours. 
+
+
+
+B.
+	CODE TO PERFORM TRANSFORMATIONS MENTIONED IN A4
+
+CREATE OR REPLACE FUNCTION timestampToDateConversion(full_timestamp TIMESTAMP)
+	RETURNS VARCHAR(10) AS $$
+		SELECT to_char(full_timestamp::date, ‘MM-DD-YYYY’)::TEXT
+	$$ LANGUAGE sql;
+
+CREATE OR REPLACE FUNCTION calculateLengthOfRental(return_date TIMESTAMP, rental_date TIMESTAMP) 
+	RETURNS VARCHAR(3) AS $$
+		SELECT CONCAT((return_date::date – rental_date::date)::TEXT, ‘d’)
+	$$ LANGUAGE sql;
+
+CREATE OR REPLACE FUNCTION getStaffFullName(first_name TEXT, last_name TEXT)
+	RETURNS VARCHAR(35) AS $$
+		SELECT CONCAT(first_name, ‘ ‘, last_name)::TEXT
+	$$ LANGUAGE sql;
+
+
+C.
+ CREATE TABLE detailed (
+	staff_id smallint,
+staff_name varchar(25),
+film_id integer,
+film_title varchar(255),
+rental_date varchar(10),
+return_date varchar(10),
+rental_length varchar(3),
+rental_rate numeric(4, 2)
+);
+
+
+ CREATE TABLE summary (
+	staff_id smallint,
+	month varchar(10),
+	total_rentals smallint,
+	total_rental_rate numeric(6, 2)
+);
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+D.
+INSERT INTO detailed (
+	SELECT
+		rental.staff_id as staff_id,
+		get_staff_full_name(staff.first_name, staff.last_name) as full_name,
+		film.film_id as film_id,
+		film.title as film_title,
+		timestamp_to_date_conversion(rental.rental_date) as rental_date,
+		timestamp_to_date_conversion(rental.return_date) as return_date,
+		calculate_rental_length(rental.return_date, rental.rental_date) as 					rental_length,
+		film.rental_rate as rental_rate
+	FROM
+		rental
+	INNER JOIN
+		inventory ON rental.inventory_id = inventory.inventory_id
+	INNER JOIN
+		film ON inventory.film_id = film.film_id
+	INNER JOIN
+		staff ON rental.staff_id = staff.staff_id
+	WHERE
+		-- COMMENT LINE BELOW -- 
+		EXTRACT(MONTH FROM current_timestamp) = EXTRACT(MONTH FROM rental.rental_date)
+		6 = EXTRACT(MONTH FROM rental.rental_date)
+	ORDER BY
+		rental_date, film_title,staff_id
+);
+
+
+E.
+	! – Logic is done in VS Code, need to figure out how triggers work
+	TRIGGER TO CONTINUOUSLY UPDATE SUMMARY TABLE
+	PROBABLY USE GROUP BY?
+
+
+
+
+F.
+	STORED PROCEDURE(???) IN TEXT FORMAT TO REFRESH BOTH TABLES
+	THINKING → DROP TABLES THEN REPOPULATE MAYBE?
+
+CREATE PROCEDURE refresh_tables()
+    AS $$
+    BEGIN
+        TRUNCATE TABLE detailed, summary;
+
+        INSERT INTO detailed (
+            SELECT
+                rental.staff_id as staff_id, 
+                get_staff_full_name(staff.first_name, staff.last_name) as full_name,
+                film.film_id as film_id,
+                film.title as film_title,
+                timestamp_to_date_conversion(rental.rental_date) as rental_date,
+                timestamp_to_date_conversion(rental.return_date) as return_date, 
+                calculate_rental_length(rental.return_date, rental.rental_date) as rental_length,
+                film.rental_rate as rental_rate
+            FROM
+                rental
+            INNER JOIN
+                inventory ON rental.inventory_id = inventory.inventory_id
+            INNER JOIN
+                film ON inventory.film_id = film.film_id
+            INNER JOIN
+                staff ON rental.staff_id = staff.staff_id
+            WHERE
+                -- 6 = EXTRACT(MONTH FROM rental.rental_date)
+                EXTRACT(MONTH FROM current_timestamp) = EXTRACT(MONTH FROM rental.rental_date)
+            ORDER BY
+                rental_date, film_title, staff_id
+        );
+        END;
+        $$ LANGUAGE plpgsql;
+
+
+
+
+*** MAKE SURE TO UPDATE AS THINGS CHANGE!!!!! 
+*** CORRECT EXTRACTION DATES !!!!! 
