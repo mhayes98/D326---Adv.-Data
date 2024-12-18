@@ -14,4 +14,4 @@ CREATE FUNCTION update_summary_table()
         END IF;
         RETURN NULL;
     END    
-    $$ LANGUAGE sql;
+    $$ LANGUAGE plpgsql;
